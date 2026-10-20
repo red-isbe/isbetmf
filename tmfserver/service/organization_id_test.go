@@ -61,3 +61,39 @@ func TestGetOrganizationWithLegacyID(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateOrganizationID checks that a new organization always gets the canonical id, and that
+// the id and the organizationIdentification carry the same "did:elsi:" identifier (ISBECORE-421).
+func TestCreateOrganizationID(t *testing.T) {
+	const want = "urn:ngsi-ld:organization:did:elsi:VATES-B12345674"
+
+	for _, identificationId := range []string{"VATES-B12345674", "did:elsi:VATES-B12345674"} {
+		t.Run(identificationId, func(t *testing.T) {
+			svc := &Service{environment: config.ISBE_PRO, ServerOperatorDid: "did:elsi:VATES-G87936159"}
+			req := &Request{ResourceName: "organization", Action: ActionCREATE}
+			req.AuthUser.OrganizationIdentifier = "VATES-B12345674"
+
+			obj := repo.TMFObjectMap{
+				"@type":       "organization",
+				"tradingName": "Good Air, S.L.",
+				"organizationIdentification": []any{
+					map[string]any{"identificationType": "did:elsi", "identificationId": identificationId},
+				},
+			}
+
+			if resp := svc.verifyObjectOnPOST(req, obj); resp != nil {
+				t.Fatalf("verifyObjectOnPOST() = %d %s", resp.StatusCode, resp.Body)
+			}
+			if got := obj.ID(); got != want {
+				t.Errorf("id = %q, want %q", got, want)
+			}
+			gotIdentification, err := obj.ELSIOrganizationIdentification()
+			if err != nil {
+				t.Fatalf("ELSIOrganizationIdentification() error = %v", err)
+			}
+			if repo.OrganizationTMFID(gotIdentification) != obj.ID() {
+				t.Errorf("organizationIdentification %q does not match id %q", gotIdentification, obj.ID())
+			}
+		})
+	}
+}

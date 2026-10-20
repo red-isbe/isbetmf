@@ -182,11 +182,9 @@ func (svc *Service) verifyObjectOnPOST(req *Request, incomingObjMap repo.TMFObje
 				return ErrorResponsef(http.StatusBadRequest, "organizationIdentification is required in organization object")
 			}
 
-			// Make sure that the identificationId has the prefix "did:elsi:"
-			if !strings.HasPrefix(identificationId, "did:elsi:") {
-				incomingObjMap.SetELSIOrganizationIdentification(identificationId)
-			}
-			id = fmt.Sprintf("urn:ngsi-ld:organization:%s", identificationId)
+			// The id and the organizationIdentification must always carry the same "did:elsi:" identifier
+			incomingObjMap.SetELSIOrganizationIdentification(identificationId)
+			id = repo.OrganizationTMFID(identificationId)
 
 		} else {
 
