@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/hesusruiz/isbetmf/config"
@@ -95,5 +98,71 @@ func TestCreateOrganizationID(t *testing.T) {
 				t.Errorf("organizationIdentification %q does not match id %q", gotIdentification, obj.ID())
 			}
 		})
+	}
+}
+
+// TestReplaceID checks that the id chosen by the caller of a REPLACE has the proper format for the resource
+// and, for organizations, matches the organizationIdentification of the object (ISBECORE-421).
+func TestReplaceID(t *testing.T) {
+	organization := func() repo.TMFObjectMap {
+		return repo.TMFObjectMap{
+			"@type":       "organization",
+			"tradingName": "Good Air, S.L.",
+			"organizationIdentification": []any{
+				map[string]any{"identificationType": "did:elsi", "identificationId": "did:elsi:VATES-B12345674"},
+			},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		resourceName string
+		id           string
+		obj          repo.TMFObjectMap
+		wantValid    bool
+	}{
+		{"canonical organization id", "organization", "urn:ngsi-ld:organization:did:elsi:VATES-B12345674", organization(), true},
+		{"legacy organization id", "organization", "urn:ngsi-ld:organization:VATES-B12345674", organization(), false},
+		{"id of another organization", "organization", "urn:ngsi-ld:organization:did:elsi:VATES-A00000000", organization(), false},
+		{"arbitrary organization id", "organization", "anything", organization(), false},
+		{"organization without identification", "organization", "urn:ngsi-ld:organization:did:elsi:VATES-B12345674",
+			repo.TMFObjectMap{"@type": "organization", "tradingName": "Good Air, S.L."}, false},
+		{"valid offering id", "productOffering", "urn:ngsi-ld:product-offering:4d5e6f", repo.TMFObjectMap{}, true},
+		{"offering id with another resource type", "productOffering", "urn:ngsi-ld:organization:4d5e6f", repo.TMFObjectMap{}, false},
+		{"offering id without suffix", "productOffering", "urn:ngsi-ld:product-offering:", repo.TMFObjectMap{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &Request{ResourceName: tt.resourceName, Action: ActionREPLACE, ID: tt.id}
+			resp := verifyReplaceID(req, tt.obj)
+			if valid := resp == nil; valid != tt.wantValid {
+				t.Fatalf("valid = %v, want %v (response: %v)", valid, tt.wantValid, resp)
+			}
+			if resp != nil && resp.StatusCode != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+			}
+		})
+	}
+}
+
+// TestReplaceRejectsInvalidIDFirst checks that verifyObjectOnREPLACE rejects an invalid id before anything else.
+func TestReplaceRejectsInvalidIDFirst(t *testing.T) {
+	svc := &Service{environment: config.ISBE_PRO}
+	req := &Request{ResourceName: "organization", Action: ActionREPLACE, ID: "urn:ngsi-ld:organization:VATES-B12345674"}
+	obj := repo.TMFObjectMap{
+		"@type":       "organization",
+		"tradingName": "Good Air, S.L.",
+		"organizationIdentification": []any{
+			map[string]any{"identificationType": "did:elsi", "identificationId": "VATES-B12345674"},
+		},
+	}
+
+	resp := svc.verifyObjectOnREPLACE(req, obj)
+	if resp == nil || resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("verifyObjectOnREPLACE() = %v, want 400", resp)
+	}
+	if body := fmt.Sprint(resp.Body); !strings.Contains(body, "invalid id") {
+		t.Errorf("body = %s, want an invalid id error", body)
 	}
 }
