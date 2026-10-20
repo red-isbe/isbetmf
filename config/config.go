@@ -207,5 +207,5 @@ func (c *Config) IsDOME() bool {
 }
 
 func (c *Config) IsISBE() bool {
-	return c.Environment == ISBE_PRE || c.Environment == ISBE_DEV
+	return c.Environment == ISBE_PRE || c.Environment == ISBE_DEV || c.Environment == ISBE_PRO
 }
