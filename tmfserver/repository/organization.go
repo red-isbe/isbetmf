@@ -244,3 +244,12 @@ func SameOrganizations(did, orgID string) bool {
 
 	return did == orgID
 }
+
+// OrganizationTMFID returns the canonical TMF id of an organization, "urn:ngsi-ld:organization:did:elsi:<identifier>".
+// It accepts the organization identifier in any of its forms: "VATES-X", "did:elsi:VATES-X",
+// "urn:ngsi-ld:organization:VATES-X" or "urn:ngsi-ld:organization:did:elsi:VATES-X".
+func OrganizationTMFID(identifier string) string {
+	identifier = strings.TrimPrefix(identifier, "urn:ngsi-ld:organization:")
+	identifier = strings.TrimPrefix(identifier, "did:elsi:")
+	return "urn:ngsi-ld:organization:did:elsi:" + identifier
+}
