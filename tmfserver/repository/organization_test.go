@@ -166,3 +166,25 @@ func TestSetELSIOrganizationIdentification(t *testing.T) {
 		assert.Equal(t, "did:elsi:NEW-ID", id)
 	})
 }
+
+func TestOrganizationTMFID(t *testing.T) {
+	const want = "urn:ngsi-ld:organization:did:elsi:VATES-B12345674"
+
+	tests := []struct {
+		name       string
+		identifier string
+	}{
+		{"bare identifier", "VATES-B12345674"},
+		{"did", "did:elsi:VATES-B12345674"},
+		{"legacy id", "urn:ngsi-ld:organization:VATES-B12345674"},
+		{"canonical id", want},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, want, OrganizationTMFID(tt.identifier))
+		})
+	}
+
+	assert.Equal(t, "urn:ngsi-ld:organization:did:elsi:NTRES-12345678", OrganizationTMFID("NTRES-12345678"))
+}
