@@ -182,11 +182,9 @@ func (svc *Service) verifyObjectOnPOST(req *Request, incomingObjMap repo.TMFObje
 				return ErrorResponsef(http.StatusBadRequest, "organizationIdentification is required in organization object")
 			}
 
-			// Make sure that the identificationId has the prefix "did:elsi:"
-			if !strings.HasPrefix(identificationId, "did:elsi:") {
-				incomingObjMap.SetELSIOrganizationIdentification(identificationId)
-			}
-			id = fmt.Sprintf("urn:ngsi-ld:organization:%s", identificationId)
+			// The id and the organizationIdentification must always carry the same "did:elsi:" identifier
+			incomingObjMap.SetELSIOrganizationIdentification(identificationId)
+			id = repo.OrganizationTMFID(identificationId)
 
 		} else {
 
@@ -253,8 +251,36 @@ func (svc *Service) verifyObjectOnPOST(req *Request, incomingObjMap repo.TMFObje
 	return nil
 }
 
+// verifyReplaceID checks that the id given by the caller of a REPLACE has the proper format for the resource.
+// For organizations it must be the canonical id derived from the organizationIdentification of the object,
+// so the object can not be stored under an id that belongs to another organization.
+func verifyReplaceID(req *Request, incomingObjMap repo.TMFObjectMap) *Response {
+
+	if req.ResourceName == types.Organization {
+		identificationId, err := incomingObjMap.ELSIOrganizationIdentification()
+		if err != nil {
+			return ErrorResponsef(http.StatusBadRequest, "organizationIdentification is required in organization object")
+		}
+		if want := repo.OrganizationTMFID(identificationId); req.ID != want {
+			return ErrorResponsef(http.StatusBadRequest, "invalid id %s for organization, expected %s", req.ID, want)
+		}
+		return nil
+	}
+
+	prefix := "urn:ngsi-ld:" + ToKebabCase(req.ResourceName) + ":"
+	if !strings.HasPrefix(req.ID, prefix) || len(req.ID) == len(prefix) {
+		return ErrorResponsef(http.StatusBadRequest, "invalid id %s, it must start with %s", req.ID, prefix)
+	}
+	return nil
+}
+
 // REPLACE is called only by an admin, so we perform less verifications
 func (svc *Service) verifyObjectOnREPLACE(req *Request, incomingObjMap repo.TMFObjectMap) *Response {
+
+	// The id is chosen by the caller, so it must have the proper format for the resource
+	if errorResponse := verifyReplaceID(req, incomingObjMap); errorResponse != nil {
+		return errorResponse
+	}
 
 	// Check existence of required fields as per TM Forum specs for this action (CREATE) and this type of object
 	actionDefinition := types.GetActionDefinition(req.ResourceName, string(req.Action))
@@ -273,8 +299,6 @@ func (svc *Service) verifyObjectOnREPLACE(req *Request, incomingObjMap repo.TMFO
 	// Set the id and href in the object to what the user provided in the request.
 	incomingObjMap.SetID(req.ID)
 	incomingObjMap.SetHref(req.ID)
-
-	// TODO: verify that the id has the proper format for the given resource
 
 	// Seller info is compulsory in all objects.
 	// As a convenience, we set the Seller info if the user did not specify it.

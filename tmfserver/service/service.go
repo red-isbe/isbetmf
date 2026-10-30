@@ -238,7 +238,7 @@ func (s *Service) IsDOME() bool {
 }
 
 func (s *Service) IsISBE() bool {
-	return s.environment == config.ISBE_PRE || s.environment == config.ISBE_DEV
+	return s.environment == config.ISBE_PRE || s.environment == config.ISBE_DEV || s.environment == config.ISBE_PRO
 }
 
 // ToKebabCase converts a camelCase string to kebab-case.
